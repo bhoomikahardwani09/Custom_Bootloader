@@ -81,6 +81,16 @@ void printm(char* format,...)
 char data[] = "Hello from bootloader..!!!\r\n";
 #define bl_rcv_len  200
 uint8_t bl_rcv_buffer[bl_rcv_len];
+
+uint8_t supported_cmd[] = {
+		BL_VERSION,
+		BL_HELP,
+		BL_CID,
+		BL_RDP_STATUS,
+		BL_GO_TO_ADDR,
+		BL_FLASH_ERASE,
+		BL_MEM_WR,
+		BL_READ_SECTOR_STATUS};
 /* USER CODE END 0 */
 
 /**
@@ -127,12 +137,12 @@ int main(void)
 	  if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_RESET)
 	  {
 		  printm("BL_Debug msg : Button is pressed..going to BL mode\r\n");
-		  bootloader_jump_to_userapp();
+		  bootloader_uart_read_data();
 	  }
 	  else
 	  {
 		  printm("BL_Debug msg : Button is not pressed..executing user application\r\n");
-		  bootloader_uart_read_data();
+		  bootloader_jump_to_userapp();
 	  }
     /* USER CODE BEGIN 3 */
   }
@@ -173,10 +183,16 @@ void bootloader_uart_read_data(void)
 
 		switch(bl_rcv_buffer[1])
 		{
-			case BL_GET_VER:
+			case BL_VERSION:
 				bl_handler_getver_cmd(bl_rcv_buffer);
 				break;
 
+			case BL_HELP:
+				bl_handle_gethelp_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_CID:
+				bl_handle_getcid_cmd(bl_rcv_buffer);
 			default:
 				printm("Invalid command code from the host\n");
 				break;
@@ -352,7 +368,7 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin : PA0 */
   GPIO_InitStruct.Pin = GPIO_PIN_0;
   GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /* EXTI interrupt init*/
@@ -367,7 +383,7 @@ static void MX_GPIO_Init(void)
 /* USER CODE BEGIN 4 */
 //////Implementation of command handle functions//////
 
-//To handle to get version command of the bootloader//
+//1. To handle to get version command of the bootloader//
 void bl_handler_getver_cmd(uint8_t *bl_rcv_buffer)
 {
 	uint8_t bl_ver;
@@ -382,11 +398,11 @@ void bl_handler_getver_cmd(uint8_t *bl_rcv_buffer)
 
 	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
 	{
-		printm("Checksum succes!!\n");
+		printm("Checksum success!!\n");
 		bootloader_send_ACK(bl_rcv_buffer[0], 1);
 		bl_ver = get_bl_version();
 		printm("BL_VER : %d %#x\n", bl_ver, bl_ver);
-		bootloader_uart_write_data(&bl_ver, 1);
+		bootloader_uart_write_data((uint8_t*)&bl_ver, 1);
 	}
 	else
 	{
@@ -396,6 +412,56 @@ void bl_handler_getver_cmd(uint8_t *bl_rcv_buffer)
 
 }
 
+//2. Bootloader sends all the supported command codes//
+void bl_handle_gethelp_cmd(uint8_t *pbuffer)
+{
+	printm("Bootloader command : bl_handle_gethelp_cmd\n");
+
+	//total length of command packet
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(bl_rcv_buffer + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success!!\n");
+		bootloader_send_ACK(bl_rcv_buffer[0], sizeof(supported_cmd));
+		bootloader_uart_write_data(supported_cmd, sizeof(supported_cmd));
+	}
+	else
+	{
+		printm("Checksum failed..!!\n");
+		bootloader_send_NACK();
+	}
+}
+
+//3. To get the chip identification no. of the MCU//
+void bl_handle_getcid_cmd(uint8_t *pbuffer)
+{
+	uint16_t bl_cid_num = 0;
+	printm("Bootloader command : bl_handle_getcid_cmd\n");
+
+	//total length of command packet
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host//
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success!!\n");
+		bootloader_send_ACK(pbuffer[0], 2);
+		bl_cid_num = get_cid_num();
+		printm("MCU ID : %d %#x\n", bl_cid_num, bl_cid_num);
+		bootloader_uart_write_data((uint8_t*)&bl_cid_num, 2);
+	}
+	else
+	{
+		printm("Checksum failed..!!\n");
+		bootloader_send_NACK();
+	}
+}
 //This function sends ACK if CRC matches with the length//
 void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
 {
@@ -442,6 +508,14 @@ uint8_t get_bl_version(void)
 void bootloader_uart_write_data(uint8_t *pbuffer, uint32_t len)
 {
 	HAL_UART_Transmit(&huart2, pbuffer, len, HAL_MAX_DELAY);
+}
+
+//This function reads the chip identifier number//
+uint16_t get_cid_num(void)
+{
+	uint16_t id;
+	id = (uint16_t)(DBGMCU->IDCODE) & 0x0FFF;
+	return id;
 }
 /* USER CODE END 4 */
 

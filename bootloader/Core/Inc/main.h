@@ -35,8 +35,14 @@ extern "C" {
 #define FLASH_SEC2_BASE_ADDR 0x08008000U
 
 //BOOTLOADER COMMAND//
-#define BL_VERSION  0x11
-#define BL_GET_VER  0x71
+#define BL_VERSION               0x11
+#define	BL_HELP                  0x02
+#define BL_CID                   0x03
+#define	BL_RDP_STATUS            0x04
+#define	BL_GO_TO_ADDR            0x05
+#define	BL_FLASH_ERASE           0x06
+#define	BL_MEM_WR                0x07
+#define	BL_READ_SECTOR_STATUS    0x08
 
 #define BL_ACK   0xAE
 #define BL_NACK  0x7F
@@ -54,8 +60,12 @@ uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host);
 void bootloader_uart_write_data(uint8_t *pbuffer, uint32_t len);
 
 uint8_t get_bl_version(void);
-
 void bl_handler_getver_cmd(uint8_t *bl_rcv_buffer);
+
+void bl_handle_gethelp_cmd(uint8_t *pbuffer);
+
+uint16_t get_cid_num(void);
+void bl_handle_getcid_cmd(uint8_t *pbuffer);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
