@@ -23,6 +23,7 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "main.h"
 #include "stm32f4xx_hal.h"
@@ -69,7 +70,7 @@ void printm(char* format,...)
 //extract the argumnet list using VA apis
 	va_list args;
 	va_start(args, format);
-
+	vsprintf(str, format,args);
 	HAL_UART_Transmit(&huart2, (uint8_t*)str, strlen(str), HAL_MAX_DELAY);
 	va_end(args);
 #endif
@@ -178,8 +179,11 @@ void bootloader_uart_read_data(void)
 	{
 		memset(bl_rcv_buffer, 0, 200);
 		HAL_UART_Receive(&huart2, bl_rcv_buffer, 1, HAL_MAX_DELAY);
-		rx_len = bl_rcv_buffer[1];
+		rx_len = bl_rcv_buffer[0];
 		HAL_UART_Receive(&huart2, &bl_rcv_buffer[1], rx_len, HAL_MAX_DELAY);
+		printm("Length byte: %d\r\n", bl_rcv_buffer[0]);
+		printm("Command byte: 0x%x\r\n", bl_rcv_buffer[1]);
+
 
 		switch(bl_rcv_buffer[1])
 		{
@@ -462,6 +466,34 @@ void bl_handle_getcid_cmd(uint8_t *pbuffer)
 		bootloader_send_NACK();
 	}
 }
+
+//4. To handle the RDP level and read it//
+void bl_handle_getrdp_cmd(uint8_t *pbuffer)
+{
+	uint8_t rdp_level = 0x00;
+	printm("Bootloader command : bl_handle_getrdp_cmd\n");
+
+	//Total length of command packet
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success!!\n");
+		bootloader_send_ACK(pbuffer[0], 2);
+		rdp_level = get_flash_RDP_level();
+		printm("MCU ID : %d %#x\n", rdp_level, rdp_level);
+		bootloader_uart_write_data(&rdp_level, 1);
+	}
+	else
+	{
+		printm("Checksum failed..!!\n");
+		bootloader_send_NACK();
+	}
+
+}
 //This function sends ACK if CRC matches with the length//
 void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
 {
@@ -470,6 +502,7 @@ void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
 	ack_buffer[0] = BL_ACK;
 	ack_buffer[1] = follow_len;
 	HAL_UART_Transmit(&huart2, ack_buffer, 2, HAL_MAX_DELAY);
+	printm("ACK Done\n");
 }
 
 //This function sends NACK if CRC doesn't match with the length//
@@ -516,6 +549,22 @@ uint16_t get_cid_num(void)
 	uint16_t id;
 	id = (uint16_t)(DBGMCU->IDCODE) & 0x0FFF;
 	return id;
+}
+
+//This function gets the RDP level from the flash memory//
+uint8_t get_flash_RDP_level(void)
+{
+	uint8_t rdp_status = 0;
+
+#if 0
+	FLASH_OBProgramInitTypeDef ob_handle;
+	HAL_FLASHEx_OBGetConfig(&ob_handle);
+	rdp_status = (uint8_t) ob_handle.RDPLevel;
+#else
+	volatile uint32_t *pOptionBytes = (uint32_t*) 0x1FFFC000;
+	rdp_status = (uint8_t) (*pOptionBytes >> 8);  //we only want bits from 8 to 15
+#endif
+	return rdp_status;
 }
 /* USER CODE END 4 */
 

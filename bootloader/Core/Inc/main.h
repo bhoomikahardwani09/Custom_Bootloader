@@ -66,6 +66,10 @@ void bl_handle_gethelp_cmd(uint8_t *pbuffer);
 
 uint16_t get_cid_num(void);
 void bl_handle_getcid_cmd(uint8_t *pbuffer);
+
+uint8_t get_flash_RDP_level(void);
+
+void bl_handle_getrdp_cmd(uint8_t *pbuffer);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
