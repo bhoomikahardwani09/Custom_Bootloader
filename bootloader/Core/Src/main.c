@@ -492,7 +492,56 @@ void bl_handle_getrdp_cmd(uint8_t *pbuffer)
 		printm("Checksum failed..!!\n");
 		bootloader_send_NACK();
 	}
+}
 
+//5. This function jumps to the given address//
+void bl_handle_jumptoaddr_cmd(uint8_t* pbuffer)
+{
+	uint32_t addr        = 0;
+	uint8_t valid_addr   = ADDR_VALID;
+	uint8_t invalid_addr = ADDR_INVALID;
+
+	printm("Bootloader command : bl_handle_jumptoaddr_cmd\n");
+
+	//Total length of command packet
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len - 4, crc_host))
+	{
+		printm("Checksum success!!");
+		bootloader_send_ACK(pbuffer[0], 1);
+
+		//extract the address to jump
+		addr = *((uint32_t*)&pbuffer[2]);
+		printm("Jump to address : %#x\n", addr);
+
+		if(verify_addr(addr) == ADDR_VALID)
+		{
+			bootloader_uart_write_data(&valid_addr, 1);
+
+			addr += 1;  //making the T bit as 1, otherwise it will result in hardfault exception
+
+			void (*jump_to_addr)(void) = (void*)addr;
+
+			printm("Jumping to the given address...\n");
+			jump_to_addr();
+		}
+
+		else
+		{
+			printm("Given address is invalid!\n");
+			bootloader_uart_write_data(&invalid_addr, 1);
+		}
+	}
+
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
 }
 //This function sends ACK if CRC matches with the length//
 void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
@@ -565,6 +614,30 @@ uint8_t get_flash_RDP_level(void)
 	rdp_status = (uint8_t) (*pOptionBytes >> 8);  //we only want bits from 8 to 15
 #endif
 	return rdp_status;
+}
+
+//This function verifies the given address is valid or not
+uint8_t verify_addr(uint32_t go_addr)
+{
+	if(go_addr >= SRAM_BASE && go_addr <= SRAM_END) return ADDR_VALID;
+	else if(go_addr >= FLASH_BASE && go_addr <= FLASH_END) return ADDR_VALID;
+	else if(go_addr >= BKPSRAM_BB_BASE && go_addr <= BKPSRAM_END) return ADDR_VALID;
+	else return ADDR_INVALID;
+}
+
+void jump_to_addr(uint32_t go_addr)
+{
+	//function pointer to hold the address of the reset handler of the go_addr//
+	void (*app_reset_handler)(void);
+	uint32_t msp_val = *(volatile uint32_t*)go_addr;
+
+	__set_MSP(msp_val);
+
+	uint32_t resethandler_addr = *(volatile uint32_t*)(go_addr + 4);
+	app_reset_handler = (void*)resethandler_addr;
+
+	app_reset_handler();
+
 }
 /* USER CODE END 4 */
 

@@ -49,6 +49,15 @@ extern "C" {
 
 #define CRC_SUCCESS 0
 #define CRC_FAILURE 1
+
+#define ADDR_VALID    0x00
+#define ADDR_INVALID  0x01
+//Start and end addresses of memories//
+#define SRAM_SIZE     128*1024
+#define SRAM_END      (SRAM_BASE + SRAM_SIZE)
+#define FLASH_SIZE    512*1024
+#define BKPSRAM_SIZE  4*1024
+#define BKPSRAM_END   (BKPSRAM_BB_BASE + BKPSRAM_SIZE)
 //BL function prototype
 void bootloader_uart_read_data();
 void bootloader_jump_to_userapp();
@@ -68,8 +77,11 @@ uint16_t get_cid_num(void);
 void bl_handle_getcid_cmd(uint8_t *pbuffer);
 
 uint8_t get_flash_RDP_level(void);
-
 void bl_handle_getrdp_cmd(uint8_t *pbuffer);
+
+uint8_t verify_addr(uint32_t go_addr);
+void jump_to_addr(uint32_t go_addr);
+void bl_handle_jumptoaddr_cmd(uint8_t* pbuffer);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
