@@ -52,6 +52,9 @@ extern "C" {
 
 #define ADDR_VALID    0x00
 #define ADDR_INVALID  0x01
+
+#define SECTOR_VALID    0x00
+#define SECTOR_INVALID  0x01
 //Start and end addresses of memories//
 #define SRAM_SIZE     128*1024
 #define SRAM_END      (SRAM_BASE + SRAM_SIZE)
@@ -82,6 +85,9 @@ void bl_handle_getrdp_cmd(uint8_t *pbuffer);
 uint8_t verify_addr(uint32_t go_addr);
 void jump_to_addr(uint32_t go_addr);
 void bl_handle_jumptoaddr_cmd(uint8_t* pbuffer);
+
+uint8_t execute_flash_erase(uint8_t sector_num, uint8_t units);
+void bl_handle_flash_erase_cmd(uint8_t* pbuffer);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

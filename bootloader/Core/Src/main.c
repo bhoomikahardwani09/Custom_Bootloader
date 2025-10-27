@@ -197,6 +197,20 @@ void bootloader_uart_read_data(void)
 
 			case BL_CID:
 				bl_handle_getcid_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_RDP_STATUS:
+				bl_handle_getrdp_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_GO_TO_ADDR:
+				bl_handle_jumptoaddr_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_FLASH_ERASE:
+				bl_handle_flash_erase_cmd(bl_rcv_buffer);
+				break;
+
 			default:
 				printm("Invalid command code from the host\n");
 				break;
@@ -543,6 +557,40 @@ void bl_handle_jumptoaddr_cmd(uint8_t* pbuffer)
 		bootloader_send_NACK();
 	}
 }
+
+//6. This command is used to mass erase the flash sectors//
+void bl_handle_flash_erase_cmd(uint8_t* pbuffer)
+{
+	uint8_t erase_status = 0x00;
+	printm("Bootloader command : bl_handle_flash_erase_cmd\n");
+
+	//Total length of command packet
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len - 4, crc_host))
+	{
+		printm("Checksum success!!");
+		bootloader_send_ACK(pbuffer[0], 1);
+		printm("Initial sector : %d Number of sectors : %d\n", pbuffer[2], pbuffer[3]);
+
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0);
+		erase_status = execute_flash_erase(pbuffer[2], pbuffer[3]);
+		HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
+
+		printm("Flash erase status : %#x\n", erase_status);
+		bootloader_uart_write_data(&erase_status, 1);
+	}
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
+
+
+}
 //This function sends ACK if CRC matches with the length//
 void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
 {
@@ -616,6 +664,7 @@ uint8_t get_flash_RDP_level(void)
 	return rdp_status;
 }
 
+
 //This function verifies the given address is valid or not
 uint8_t verify_addr(uint32_t go_addr)
 {
@@ -638,6 +687,38 @@ void jump_to_addr(uint32_t go_addr)
 
 	app_reset_handler();
 
+}
+
+uint8_t execute_flash_erase(uint8_t sector_num, uint8_t units)
+{
+	FLASH_EraseInitTypeDef flasherase_handle;
+	uint32_t error;
+	HAL_StatusTypeDef status;
+
+	if(sector_num > 8) return SECTOR_INVALID;
+	if(sector_num < 8 || sector_num == 0xff)
+	{
+		if(sector_num == (uint8_t) 0xff) flasherase_handle.TypeErase = FLASH_TYPEERASE_MASSERASE;
+
+		else
+		{
+			if(units > 8 - sector_num) units = sector_num;
+
+			flasherase_handle.TypeErase = FLASH_TYPEERASE_SECTORS;
+			flasherase_handle.Sector    = sector_num;
+			flasherase_handle.NbSectors = units;
+		}
+		flasherase_handle.Banks = FLASH_BANK_1;
+
+		//Access to the flash registers//
+		HAL_FLASH_Unlock();
+		flasherase_handle.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+		status = (uint8_t)HAL_FLASHEx_Erase(&flasherase_handle, &error);
+		HAL_FLASH_Lock();
+
+		return status;
+	}
+	return SECTOR_INVALID;
 }
 /* USER CODE END 4 */
 
