@@ -43,6 +43,9 @@ extern "C" {
 #define	BL_FLASH_ERASE           0x06
 #define	BL_MEM_WR                0x07
 #define	BL_READ_SECTOR_STATUS    0x08
+#define BL_EN_RW_PROTECT         0x09
+#define BL_DI_RW_PROTECT         0x0A
+#define BL_READ_OTP              0x0B
 
 #define BL_ACK   0xAE
 #define BL_NACK  0x7F
@@ -88,6 +91,21 @@ void bl_handle_jumptoaddr_cmd(uint8_t* pbuffer);
 
 uint8_t execute_flash_erase(uint8_t sector_num, uint8_t units);
 void bl_handle_flash_erase_cmd(uint8_t* pbuffer);
+
+uint8_t execute_mem_wr(uint8_t *pbuffer, uint32_t mem_addr, uint32_t len);
+void bl_handle_mem_wr_cmd(uint8_t *pbuffer);
+
+void bl_handle_en_rw_protect_cmd(uint8_t *pbuffer);
+
+void bl_handle_dis_rw_protect_cmd(uint8_t *pbuffer);
+
+void bl_handle_read_sector_status(uint8_t *pbuffer);
+uint16_t read_OB_rw_protect_status(void);
+
+uint8_t config_flash_rw_protect(uint8_t sector_details, uint8_t protection_mode, uint8_t DI);
+
+uint8_t read_otp_block(uint16_t block_num);
+void bl_handle_read_OTP_cmd(uint8_t *pbuffer);
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

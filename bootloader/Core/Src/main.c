@@ -91,7 +91,10 @@ uint8_t supported_cmd[] = {
 		BL_GO_TO_ADDR,
 		BL_FLASH_ERASE,
 		BL_MEM_WR,
-		BL_READ_SECTOR_STATUS};
+		BL_READ_SECTOR_STATUS,
+		BL_EN_RW_PROTECT,
+		BL_DI_RW_PROTECT,
+		BL_READ_OTP};
 /* USER CODE END 0 */
 
 /**
@@ -209,6 +212,26 @@ void bootloader_uart_read_data(void)
 
 			case BL_FLASH_ERASE:
 				bl_handle_flash_erase_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_MEM_WR:
+				bl_handle_mem_wr_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_READ_SECTOR_STATUS:
+				bl_handle_read_sector_status(bl_rcv_buffer);
+				break;
+
+			case BL_EN_RW_PROTECT:
+				bl_handle_en_rw_protect_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_DI_RW_PROTECT:
+				bl_handle_dis_rw_protect_cmd(bl_rcv_buffer);
+				break;
+
+			case BL_READ_OTP:
+				bl_handle_read_OTP_cmd(bl_rcv_buffer);
 				break;
 
 			default:
@@ -589,7 +612,164 @@ void bl_handle_flash_erase_cmd(uint8_t* pbuffer)
 		bootloader_send_NACK();
 	}
 
+}
 
+//7. This command handles to write in the flash region of the mcu//
+void bl_handle_mem_wr_cmd(uint8_t *pbuffer)
+{
+	uint8_t val_addr = ADDR_VALID, status_wr = 0x00, len = pbuffer[0], checksum = 0;
+	uint8_t payload_len = pbuffer[6];
+	uint32_t mem_addr = *( (uint32_t*) (&pbuffer[2]) );
+	checksum = pbuffer[len];
+	printm("Bootloader command : bl_handle_mem_wr_cmd\n");
+
+	//total length
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len - 4, crc_host))
+	{
+		printm("Checksum success!!");
+		bootloader_send_ACK(pbuffer[0], 1);
+		printm("Memory write address : %#x\n", mem_addr);
+
+		if(verify_addr(mem_addr) == ADDR_VALID)
+		{
+			printm("Write address is valid\n");
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 0);
+			status_wr = execute_mem_wr(&pbuffer[7], mem_addr, payload_len);
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, 1);
+
+			bootloader_uart_write_data(&status_wr, 1);
+		}
+		else
+		{
+			printm("Write address is invalid\n");
+			status_wr = ADDR_INVALID;
+			bootloader_uart_write_data(&status_wr, 1);
+		}
+	}
+
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
+
+}
+
+//8. This command enables the read/write protection
+void bl_handle_en_rw_protect_cmd(uint8_t *pbuffer)
+{
+	uint8_t status = 0x00;
+	printm("Bootloader command : bl_handle_en_rw_protect_cmd\n");
+
+	//total length
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success..!!\n");
+		bootloader_send_ACK(pbuffer[0], 1);
+
+		status = config_flash_rw_protect(pbuffer[2], pbuffer[3], 0);
+
+		printm("Flash erase status : %#x\n", status);
+		bootloader_uart_write_data(&status, 1);
+	}
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
+}
+
+//9. This command disables the read/write protection
+void bl_handle_dis_rw_protect_cmd(uint8_t *pbuffer)
+{
+	uint8_t status = 0x00;
+	printm("Bootloader command : bl_handle_dis_rw_protect_cmd\n");
+
+	//Total length
+	uint32_t cmd_packet_len = pbuffer[0] + 1;
+
+	//Extract the CRC32 sent by the host
+	uint32_t crc_host = *((uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4));
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success..!!\n");
+		bootloader_send_ACK(pbuffer[0], 1);
+
+		status = config_flash_rw_protect(0, 0, 1);
+
+		printm("Flash erase status : %#x", status);
+		bootloader_uart_write_data(&status, 1);
+	}
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
+}
+
+//10. This command reads the status of all sectors
+void bl_handle_read_sector_status(uint8_t *pbuffer)
+{
+	uint8_t status = 0x00;
+	printm("Bootloader command : bl_handle_read_sector_status\n");
+
+	//Total length
+	uint32_t cmd_packet_len = bl_rcv_buffer[0] + 1;
+
+	//Extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success..!!\n");
+		bootloader_send_ACK(pbuffer[0], 2);
+		status = read_OB_rw_protect_status();
+		printm("nWRP Status : %#x\n", status);
+		bootloader_uart_write_data((uint8_t*)&status, 2);
+	}
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
+}
+
+//11. This command handles to read the OTP data blocks
+void bl_handle_read_OTP_cmd(uint8_t *pbuffer)
+{
+	uint8_t status = 0x00;
+	printm("Bootloader command : bl_handle_read_OTP_cmd\n");
+
+	//Total length
+	uint32_t cmd_packet_len = pbuffer[0] + 1;
+
+	//Extract the CRC32 sent by the host
+	uint32_t crc_host = *( (uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4) );
+
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	{
+		printm("Checksum success..!!\n");
+		bootloader_send_ACK(pbuffer[0], 1);
+		status = read_otp_block(pbuffer[2]);
+		printm("OTP block data: %d", status);
+		bootloader_uart_write_data(&status, 1);
+	}
+	else
+	{
+		printm("Checksum failed!!\n");
+		bootloader_send_NACK();
+	}
 }
 //This function sends ACK if CRC matches with the length//
 void bootloader_send_ACK(uint8_t cmd_code, uint8_t follow_len)
@@ -609,6 +789,11 @@ void bootloader_send_NACK(void)
 	HAL_UART_Transmit(&huart2, &nack, 1, HAL_MAX_DELAY);
 }
 
+//This function writes data in UART2//
+void bootloader_uart_write_data(uint8_t *pbuffer, uint32_t len)
+{
+	HAL_UART_Transmit(&huart2, pbuffer, len, HAL_MAX_DELAY);
+}
 //This function verify the CRC of the given buffer in pData
 //pData : pointer to the data
 //len : length for which CRC is to be calculated
@@ -620,6 +805,7 @@ uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host)
 	{
 		uint32_t idata = pData[i];
 		crc_val = HAL_CRC_Accumulate(&hcrc, &idata, 1);
+
 	}
 
 	if(crc_val == crc_host)
@@ -633,11 +819,6 @@ uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host)
 uint8_t get_bl_version(void)
 {
 	return BL_VERSION;
-}
-//This function writes data in UART2//
-void bootloader_uart_write_data(uint8_t *pbuffer, uint32_t len)
-{
-	HAL_UART_Transmit(&huart2, pbuffer, len, HAL_MAX_DELAY);
 }
 
 //This function reads the chip identifier number//
@@ -719,6 +900,153 @@ uint8_t execute_flash_erase(uint8_t sector_num, uint8_t units)
 		return status;
 	}
 	return SECTOR_INVALID;
+}
+
+//This function writes from the given base address into the flash region byte by byte//
+uint8_t execute_mem_wr(uint8_t *pbuffer, uint32_t mem_addr, uint32_t len)
+{
+	uint8_t status = HAL_OK;
+	HAL_FLASH_Unlock();
+
+	for(uint32_t i = 0; i < len; i++)
+	{
+		status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_BYTE, mem_addr + i, pbuffer[i]);
+	}
+
+	HAL_FLASH_Lock();
+	return status;
+}
+
+//This function configures the read/write protection in the flash sectors
+//Modifying user option bytes
+//To modify the user option value, follow the sequence below:
+//1.Check that no Flash memory operation is ongoing by checking the BSY bit in the
+//FLASH_SR register
+//2.Write the desired option value in the FLASH_OPTCR register.
+//3.Set the option start bit (OPTSTRT) in the FLASH_OPTCR register
+//4.Wait for the BSY bit to be cleared.
+//@param sector details : to configure which sector
+//@param protection_mode : 1 = write protect
+//                         2 : read and write protect
+//@param DI : disable
+uint8_t config_flash_rw_protect(uint8_t sector_details, uint8_t protection_mode, uint8_t DI)
+{
+//	modify the address 0x1FFF C008 bit 15(SPRMOD)
+	volatile uint32_t *pOTPCR = &FLASH->OPTCR;
+
+	if(DI)
+	{
+		// disable all the r/w protection on sectors
+		HAL_FLASH_OB_Unlock();
+
+		//clear the bit 31 (default state)
+		*pOTPCR &= ~(1 << 31);
+
+		//clear the protection by making all the bits of sector as 1
+		*pOTPCR |= (0xFF << 16);
+
+       //setting operation start bit
+		*pOTPCR |= (1 << 1);
+
+		//wait till there is no active operation on flash
+		while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET );
+
+		HAL_FLASH_OB_Lock();
+
+		return 0;
+	}
+
+	else if(protection_mode == (uint8_t) 1)
+	{
+		//write protection to sectors mentioned in sector details//
+
+		//Unlock configuration for option bytes
+		HAL_FLASH_OB_Unlock();
+
+		//wait till there is no active operation on flash
+		while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET );
+
+//      For bit 31 of the register
+//		nWRPi [7:0] = from bit 16 to 23
+//		SPRMOD: Selection of Protection Mode of nWPRi bits
+//		0: nWPRi bits used for sector i write protection (Default)
+//		1: nWPRi bits used for sector i PCROP protection (Sector)
+
+		*pOTPCR &= ~(1 << 31);
+		*pOTPCR &= ~(sector_details << 16);
+
+//		setting operation start bit
+		*pOTPCR |= (1 << 1);
+
+		//wait till there is no active operation on flash
+		while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET );
+
+		HAL_FLASH_OB_Lock();
+	}
+
+	else if(protection_mode == (uint8_t) 2)
+	{
+		//read and write protection to the sectors mentioned
+		//Unlock configuration for option bytes
+		HAL_FLASH_OB_Unlock();
+
+		//wait till there is no active operation on flash
+		while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET );
+
+		//set the bit 31 in the FLASH_OPTCR
+		*pOTPCR |= (1 << 31);
+
+		//rw protect on sectors mentioned
+		*pOTPCR &= ~(0xff < 16);
+		*pOTPCR |= (sector_details << 16);
+
+       //setting operation start bit
+		*pOTPCR |= (1 << 1);
+
+		//wait till there is no active operation on flash
+		while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_BSY) != RESET );
+
+		HAL_FLASH_OB_Lock();
+
+	}
+
+	return 0;
+
+}
+
+uint16_t read_OB_rw_protect_status(void)
+{
+	FLASH_OBProgramInitTypeDef ob_init;
+	HAL_FLASH_OB_Unlock();
+	HAL_FLASHEx_OBGetConfig(&ob_init);
+	HAL_FLASH_OB_Lock();
+	return (uint16_t)ob_init.WRPSector;
+}
+
+uint8_t read_otp_block(uint16_t block_num)
+{
+	uint32_t otp_data[32] = {0};
+	if(block_num < 0 || block_num > 15)
+	{
+		printm("Invalid OTP block number!\n");
+		return 0;
+	}
+	uint32_t block_offset = block_num * 32;
+	uint32_t block_addr = FLASH_OTP_BASE + block_offset;
+
+	for(uint8_t i = 0; i <= 31; i++)
+	{
+		otp_data[i] = *( (uint8_t*)(block_addr + i) );
+	}
+
+	printm("OTP block %d Data :\n", block_num);
+	for(uint8_t i = 0; i <= 31; i++)
+	{
+		printm("%02X ", otp_data[i]);
+	}
+	printm("\n");
+
+	return otp_data[0];
 }
 /* USER CODE END 4 */
 
