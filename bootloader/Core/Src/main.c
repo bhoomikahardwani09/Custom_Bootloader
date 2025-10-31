@@ -808,6 +808,8 @@ uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host)
 
 	}
 
+	//Reset CRC calculation unit
+	__HAL_CRC_DR_RESET(&hcrc);
 	if(crc_val == crc_host)
 	{
 		return CRC_SUCCESS;

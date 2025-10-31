@@ -32,7 +32,7 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdint.h>
-#define FLASH_SEC2_BASE_ADDR 0x08008000U
+#define FLASH_SEC2_BASE_ADDR     0x08008000U
 
 //BOOTLOADER COMMAND//
 #define BL_VERSION               0x11
@@ -47,14 +47,14 @@ extern "C" {
 #define BL_DI_RW_PROTECT         0x0A
 #define BL_READ_OTP              0x0B
 
-#define BL_ACK   0xAE
-#define BL_NACK  0x7F
+#define BL_ACK                   0xAE
+#define BL_NACK                  0x7F
 
-#define CRC_SUCCESS 0
-#define CRC_FAILURE 1
+#define CRC_SUCCESS     0
+#define CRC_FAILURE     1
 
-#define ADDR_VALID    0x00
-#define ADDR_INVALID  0x01
+#define ADDR_VALID      0x00
+#define ADDR_INVALID    0x01
 
 #define SECTOR_VALID    0x00
 #define SECTOR_INVALID  0x01
