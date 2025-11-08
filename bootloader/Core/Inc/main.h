@@ -35,7 +35,7 @@ extern "C" {
 #define FLASH_SEC2_BASE_ADDR     0x08008000U
 
 //BOOTLOADER COMMAND//
-#define BL_VERSION               0x11
+#define BL_VERSION               0x51
 #define	BL_HELP                  0x02
 #define BL_CID                   0x03
 #define	BL_RDP_STATUS            0x04

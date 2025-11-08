@@ -182,8 +182,7 @@ void bootloader_uart_read_data(void)
 	{
 		memset(bl_rcv_buffer, 0, 200);
 		HAL_UART_Receive(&huart2, bl_rcv_buffer, 1, HAL_MAX_DELAY);
-		rx_len = bl_rcv_buffer[0];
-		HAL_UART_Receive(&huart2, &bl_rcv_buffer[1], rx_len, HAL_MAX_DELAY);
+		HAL_UART_Receive(&huart2, &bl_rcv_buffer[1], bl_rcv_buffer[0], HAL_MAX_DELAY);
 		printm("Length byte: %d\r\n", bl_rcv_buffer[0]);
 		printm("Command byte: 0x%x\r\n", bl_rcv_buffer[1]);
 
@@ -437,7 +436,7 @@ void bl_handler_getver_cmd(uint8_t *bl_rcv_buffer)
 	//extract CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*)(bl_rcv_buffer + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(! bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len - 4, crc_host) )
 	{
 		printm("Checksum success!!\n");
 		bootloader_send_ACK(bl_rcv_buffer[0], 1);
@@ -464,7 +463,7 @@ void bl_handle_gethelp_cmd(uint8_t *pbuffer)
 	//extract CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*)(bl_rcv_buffer + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success!!\n");
 		bootloader_send_ACK(bl_rcv_buffer[0], sizeof(supported_cmd));
@@ -489,7 +488,7 @@ void bl_handle_getcid_cmd(uint8_t *pbuffer)
 	//extract the CRC32 sent by the host//
 	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success!!\n");
 		bootloader_send_ACK(pbuffer[0], 2);
@@ -516,7 +515,7 @@ void bl_handle_getrdp_cmd(uint8_t *pbuffer)
 	//extract the CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success!!\n");
 		bootloader_send_ACK(pbuffer[0], 2);
@@ -672,7 +671,7 @@ void bl_handle_en_rw_protect_cmd(uint8_t *pbuffer)
 	//extract the CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*)(&bl_rcv_buffer[0] + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success..!!\n");
 		bootloader_send_ACK(pbuffer[0], 1);
@@ -701,7 +700,7 @@ void bl_handle_dis_rw_protect_cmd(uint8_t *pbuffer)
 	//Extract the CRC32 sent by the host
 	uint32_t crc_host = *((uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4));
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success..!!\n");
 		bootloader_send_ACK(pbuffer[0], 1);
@@ -730,7 +729,7 @@ void bl_handle_read_sector_status(uint8_t *pbuffer)
 	//Extract the CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success..!!\n");
 		bootloader_send_ACK(pbuffer[0], 2);
@@ -757,7 +756,7 @@ void bl_handle_read_OTP_cmd(uint8_t *pbuffer)
 	//Extract the CRC32 sent by the host
 	uint32_t crc_host = *( (uint32_t*) (bl_rcv_buffer + cmd_packet_len - 4) );
 
-	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len, crc_host))
+	if(!bootloader_verify_CRC(&bl_rcv_buffer[0], cmd_packet_len-4, crc_host))
 	{
 		printm("Checksum success..!!\n");
 		bootloader_send_ACK(pbuffer[0], 1);
@@ -801,6 +800,7 @@ void bootloader_uart_write_data(uint8_t *pbuffer, uint32_t len)
 uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host)
 {
 	uint32_t crc_val = 0xff;
+
 	for(uint32_t i = 0; i < len; i++)
 	{
 		uint32_t idata = pData[i];
@@ -815,6 +815,7 @@ uint8_t bootloader_verify_CRC(uint8_t *pData, uint32_t len, uint32_t crc_host)
 		return CRC_SUCCESS;
 	}
 	else return CRC_FAILURE;
+
 }
 
 //This function returns the bl_version macro//
